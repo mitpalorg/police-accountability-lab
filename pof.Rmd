@@ -1,0 +1,366 @@
+---
+title: "Police Use of Force, Minneapolis"
+subtitle: Open Data Minneapolis
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+This is a preliminary analysis of Police Use of Force data obtained from Open Data Minneapolis. (link: http://opendata.minneapolismn.gov/datasets/police-use-of-force). It has basic vizualisations.
+
+
+```{r, warning=FALSE, message=TRUE}
+library(dplyr)
+library(ggplot2)
+
+pof <- read.csv("~/Documents/Police_accountability/Police_Use_of_Force.csv")
+```
+
+Number of null values for each variable:
+
+```{r, warning=FALSE, message=FALSE}
+sapply(pof, function(x) sum(is.na(x)))
+```
+
+```{r}
+# getting dates from ResponseDate
+pof$Date <- as.Date(pof$ResponseDate)
+
+# creating separate variables for the year and month
+pof$Year <- format(as.Date(pof$Date, format="%d/%m/%Y"),"%Y")
+pof$Month <- format(as.Date(pof$Date, format="%d/%m/%Y"),"%m")
+
+pof$Year <- as.factor(pof$Year)
+```
+
+
+### By year
+
+```{r}
+# create a data frame for counts by year
+year_counts <- pof %>% 
+  group_by(Year) %>%
+  summarise(n())
+
+colnames(year_counts) <- c("Year", "Count")
+
+# plot number of observations by year
+ggplot(data=year_counts, aes(x=Year, y=Count)) + geom_bar(stat="identity") + 
+  geom_text(aes(label=Count), vjust=-0.3, size=3.5) + theme_minimal()
+```
+
+How many months of data is available for 2020? Do all other years (except 1970) have atleast one data point from each month?
+
+```{r}
+print(unique(pof$Month[pof$Year == 2020])) # first 6 months of the year
+print(pof %>% group_by(Year) %>% summarise(n_distinct(Month)))
+```
+
+
+### Primary Offenses
+
+Number of unique primary offenses:
+
+```{r, warning=FALSE, message=FALSE}
+# removal of possible trailing whitespaces
+pof$PrimaryOffense <- trimws(pof$PrimaryOffense) #present
+
+print(length(unique(pof$PrimaryOffense)))
+```
+
+For a list of Common Abbreviations Used in Criminal Record Reports refer to this pdf.
+(link: https://www.cdse.edu/documents/cdse/CriminalRecordAbbreviations.pdf)
+
+```{r, warning=FALSE, message=FALSE}
+# visualise top 10 primary offenses
+
+primoff <- pof %>%
+  group_by(PrimaryOffense) %>%
+  summarise(n())
+
+colnames(primoff) <- c("PrimOff", "Count")
+
+primoff <- primoff[order(-primoff$Count), ]
+
+ggplot(data=primoff[1:10,], aes(x=reorder(PrimOff, -Count), y=Count)) + xlab("Primary Offense") +
+  geom_bar(stat="identity") + geom_text(aes(label=Count), vjust=-0.3, size=3.5) + theme_minimal()
+
+```
+
+
+### Problem
+What problem occured?
+
+Number of unique problems encountered:
+
+```{r, warning=FALSE, message=TRUE}
+# removal of possible trailing whitespaces
+pof$Problem <- trimws(pof$Problem) #absent
+
+print(length(unique(tolower(pof$Problem))))
+```
+
+```{r, warning=FALSE, message=FALSE}
+# visualise top 10 problems
+
+probs <- pof %>%
+  group_by(tolower(Problem)) %>%
+  summarise(n())
+
+colnames(probs) <- c("Problem", "Count")
+
+probs <- probs[order(-probs$Count), ]
+
+ggplot(data=probs[1:10,], aes(x=reorder(Problem, -Count), y=Count)) + 
+  geom_bar(stat="identity") + geom_text(aes(label=Count), vjust=-0.3, size=3.5) + xlab("Problem") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+
+### Types of Force and Force Actions
+
+What type of force was used?
+
+```{r, warning=FALSE, message=FALSE}
+# removal of possible trailing whitespaces
+pof$ForceType <- trimws(pof$ForceType) #absent
+
+print(unique(tolower(pof$ForceType)))
+```
+
+```{r, warning=FALSE, message=FALSE}
+# visualise type of force
+
+force <- pof %>%
+  group_by(tolower(ForceType)) %>%
+  summarise(n())
+
+colnames(force) <- c("Force", "Count")
+
+force <- force[order(-force$Count), ]
+
+ggplot(data=force, aes(x=reorder(Force, -Count), y=Count)) + 
+  geom_bar(stat="identity") + geom_text(aes(label=Count), vjust=-0.3, size=3.5) + xlab("ForceType") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+What force type action was made?
+
+```{r, warning=FALSE, message=FALSE}
+# force type actions fall under force type i.e. each force type has a set of actions that can be associated with it
+options(width=20)
+
+#removal of possible trailing whitespaces from force type action
+pof$ForceTypeAction <- trimws(pof$ForceTypeAction) #absent
+
+forceact <- pof %>% group_by(tolower(ForceType), tolower(ForceTypeAction)) %>% summarise(n())
+
+colnames(forceact)[3] <- "Count"
+forceact <- forceact[order(-forceact$Count),]
+print(forceact)
+```
+
+
+### Type of Resistance
+
+How did the subject resist?
+
+```{r, warning=FALSE, message=FALSE}
+# this field has trialing whitespaces, remove them
+pof$TypeOfResistance <- trimws(pof$TypeOfResistance) #present
+
+# tensed, Tensed, TENSED - convert all to lower case
+print(unique(tolower(pof$TypeOfResistance)))
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+# visualise type of force
+
+res <- pof %>%
+  group_by(tolower(TypeOfResistance)) %>%
+  summarise(n())
+
+colnames(res) <- c("Resistance", "Count")
+
+res <- res[order(-res$Count), ]
+
+ggplot(data=res, aes(x=reorder(Resistance, -Count), y=Count)) + 
+  geom_bar(stat="identity") + geom_text(aes(label=Count), vjust=-0.3, size=3.5) + xlab("Resistance") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+The subject was "Tensed" in the majority of cases where the police used force.
+
+```{r}
+# relation between type of resistance and type of force used
+fores <- pof %>% group_by(tolower(TypeOfResistance), tolower(ForceType)) %>% summarise(n())
+colnames(fores) <- c("Resistance", "Force", "Count")
+
+print("Grouped by Resistance")
+fores %>% ungroup() %>% group_by(Resistance) %>% filter(Count == max(Count))
+
+print("Grouped by Force")
+fores %>% ungroup() %>% select(Force, Resistance, Count) %>% group_by(Force) %>% filter(Count == max(Count))
+```
+Possibly, some more analysis can be done for Force and Resistance.
+
+### Was a 911 call made?
+
+```{r, warning=FALSE, message=FALSE}
+print(pof %>% group_by(Is911Call) %>% summarise(n()))
+```
+
+Was the subject injured?
+
+```{r, warning=FALSE, message=FALSE}
+print(pof %>% group_by(SubjectInjury) %>% summarise(n()))
+```
+
+Is it surprising that there are so many cases where this data is unavailable?
+
+Breaking down these values by year:
+```{r, warning=FALSE, message=FALSE}
+subinyear <- pof %>% group_by(SubjectInjury, Year) %>% summarise(n())
+colnames(subinyear)[3] <- "Count"
+
+ggplot(data=subinyear, aes(x=SubjectInjury, y=Count, fill=Year)) + 
+  geom_bar(stat="identity", position=position_dodge()) + theme_minimal()
+```
+
+
+## By Race
+
+```{r, warning=FALSE, message=FALSE}
+
+race <- pof %>% 
+  group_by(Race) %>% 
+  summarise(n())
+
+colnames(race) <- c("Race", "Count")
+
+race <- race[order(-race$Count), ]
+
+ggplot(data=race, aes(x=reorder(Race, -Count), y=Count)) + 
+  geom_bar(stat="identity") + geom_text(aes(label=Count), vjust=-0.3, size=3.5) + xlab("Race") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+These are absolute counts but a next step would be to get percentages w.r.t overall population. (There are many years here so some sort of aggregation can be done to get these estimates) It's already apparent though that disproportionality exists. 
+
+(In 2020, Minnesota is 83.3% white, 6.19% black, 4.75% asian, 1.07% Native American, 0.04% Native Hawaiian or Pacific Highlander, 2.85% mixed race and 1.77% with unknown race.
+Source: https://worldpopulationreview.com/states/minnesota-population/) 
+
+### Is there a relation between race and type of force used?
+
+```{r, warning=FALSE, message=FALSE}
+# force_race <- pof %>% group_by(tolower(Race), tolower(ForceType)) %>% summarise(n())
+
+race_force<-pof %>%
+  group_by(tolower(Race),tolower(ForceType)) %>%
+  summarise(n())
+
+colnames(race_force) <- c("Race", "Force", "Count")
+
+print("Grouped by Race")
+b<-race_force %>% ungroup() %>%
+  group_by(Race) %>%
+  filter(Count==max(Count))
+
+print("Grouped by Force")
+c<-race_force %>% ungroup() %>%
+  group_by(Force) %>%
+  filter(Count==max(Count))
+
+ggplot(data=race_force,aes(x=reorder(Race,-Count),y=Count, fill=Force)) + geom_bar(stat="identity") + xlab("Race")+theme_minimal()+theme(axis.text.x=element_text(angle=90,vjust=0.5,hjust=1))
+
+
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+
+sex <- pof %>% group_by(Sex) %>% summarise(n())
+
+colnames(sex) <- c("Sex", "Count")
+
+ggplot(data=sex, aes(x=Sex, y=Count)) +
+  geom_bar(stat="identity") + theme_minimal()
+
+```
+
+
+### Age Distribution
+
+```{r, warning=FALSE, message=FALSE}
+
+age <- data.frame(subset(pof$EventAge, (pof$EventAge >= 0 & !(is.na(pof$EventAge)))))
+
+colnames(age) <- "Age"
+
+ggplot(data=age, aes(x=Age)) +
+  geom_histogram(position="identity", bins=20, colour="black", fill="white") +
+  scale_x_continuous(n.breaks=20) + theme_minimal()
+
+```
+
+
+### Negihbourhoods
+
+Are there any neighbourhoods that experienced the highest use of police force?
+
+```{r, warning=FALSE, message=FALSE}
+print(length(unique(pof$Neighborhood)))
+```
+
+```{r, warning=FALSE, message=FALSE}
+# visualise top 10 neighbourhoods
+
+nbr <- pof %>%
+  group_by(Neighborhood) %>%
+  summarise(n())
+
+colnames(nbr) <- c("Neighborhood", "Count")
+
+nbr <- nbr[order(-nbr$Count), ]
+
+ggplot(data=nbr[1:10,], aes(x=reorder(Neighborhood, -Count), y=Count)) + 
+  geom_bar(stat="identity") + geom_text(aes(label=Count), vjust=-0.3, size=3.5) + xlab("Neighborhood") + theme_minimal() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
